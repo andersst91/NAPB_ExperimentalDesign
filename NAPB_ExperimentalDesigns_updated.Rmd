@@ -1,0 +1,1092 @@
+---
+title: "NAPB Experimental Design Workshop"
+author: "Steve Anderson"
+date: "4/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r eval=T, echo=T, error=F, warning=F, message=F}
+install.packages("lme4")
+install.packages("ggplot2")
+install.packages("car")
+install.packages("lsmeans")
+install.packages("multcomp")
+install.packages("lmerTest")
+install.packages("qqplot")
+install.packages("lmerTest")
+install.packages("afex")
+
+
+library("lme4")
+library("ggplot2")
+library("car")
+library("lsmeans")
+library("multcomp")
+library("lmerTest")
+library("dplyr")
+library("qqplotr")
+library("lmerTest")
+library("afex")
+```
+
+> ## 1. Completely Randomized Design (CRD)
+> The simplest ANOVA design from the standpoint of assigning experimental units to treatments.
+
+> #### **Assumptions:**
+> 1. Independent observations
+> 2. Normally distributed residuals
+> 3. Equal variance for each population  
+
+> ### **Advantages:**
+> * Simplicity
+> * Avoids making dubious statistical assumptions.
+> * Few violation of assumptions.
+> * Statistical anaylsis is simple.
+
+> ### **Disadvantages:**
+> * Lack of accuracy or ineeficiency to precisily estimate treatment effects.
+
+> #### Decision: 
+> If the between group variability is larger than the within group variability, reject null hypothesis.
+
+> #### Dataset:
+> An animal science study of vitamin supplementation randomly assigned to 5 heifers,to each of eight treatment groups.
+
+```{r eval=T}
+vitamin<-data.frame(
+  Treatment=c(rep("A",5),rep("B",5),rep("C",5),rep("D",5),rep("E",5),rep("F",5),rep("G",5),rep("H(Control)",5)),
+  Replicate=rep(1:5,8),
+  Weight.gain.kg=c(4.5,5.2,6.2,3.9,4.9,
+                   5.6,4.7,4.3,4.4,6.1,
+                   6.4,6.7,6.8,6.1,6.9,
+                   5.2,5.0,6.8,3.6,5.6,
+                   4.0,4.9,4.3,4.8,4.2,
+                   7.1,6.5,6.2,6.8,6.1,
+                   6.1,4.9,4.2,3.9,6.8,
+                   4.6,4.0,4.9,3.8,4.2)
+)
+
+vitamin$Treatment<-as.factor(vitamin$Treatment)
+vitamin$Replicate<-as.factor(vitamin$Replicate)
+
+
+head(vitamin)
+```
+
+> Lets check the data structure.
+
+```{r eval=T}
+summary(vitamin)
+```
+
+
+> We can view the entire table in a new tab.
+
+```{r eval=F}
+View(vitamin)
+```
+
+
+
+> Lets make some figures to visualize our data.
+
+```{r eval=T}
+stripchart(Weight.gain.kg~Treatment, vertical = TRUE, pch = 1, data = vitamin)
+```
+
+```{r eval=T}
+boxplot(Weight.gain.kg~Treatment, data = vitamin)
+```
+
+
+> Cool data! But those graphs aren't very pretty. ggplot to the rescue!
+
+```{r eval=T}
+ggplot(vitamin,aes(Treatment,Weight.gain.kg,color=Treatment))+geom_point(size=4)+theme_classic()
+```
+
+```{r eval=T}
+ggplot(vitamin,aes(Treatment,Weight.gain.kg,fill=Treatment))+geom_boxplot(size=1)+theme_classic()
+```
+
+>Lets run the ANOVA using the aov function.
+
+```{r eval=T}
+CRD<-aov(Weight.gain.kg~Treatment,data=vitamin)
+
+summary(CRD)
+```
+
+> The model indicates that significant differences exist between the treatments
+> now need to check model assumption prior to presenting the model results.
+
+> #### Normality
+> QQ-plots are a great way to visualize normality
+
+```{r eval=T}
+plot(CRD, which=2)
+```
+>Histograms can also be used to qualitatively access residual normality.
+
+```{r eval=T}
+hist(CRD$residuals)
+```
+
+> #### Shapiro-Wilk test normality test 
+> p-val < alpha : reject H~0~ that the residuals are normally distributed.
+
+```{r eval=T}
+shapiro.test(CRD$residuals)
+```
+
+
+> #### Unequal Variance Test
+> Visually assess homogeneous variances between groups.
+
+```{r eval=T}
+plot(CRD, which=1)
+```
+
+> #### Levene's test 
+> Will provide a p-value to unequal variance testing.p-val < alpha : reject H~0~ that the variances are equal.
+
+```{r eval=T}
+leveneTest(Weight.gain.kg~Treatment,data=vitamin)
+```
+
+> #### Least Squared Means Comparision
+
+```{r eval=T}
+(LSD<-lsmeans(CRD, ~Treatment))
+```
+
+> Now lets add the connecting letter report.
+
+```{r eval=T}
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+>Reordering factors to make the graph below more visually appealing. 
+
+```{r eval=T}
+LSM$Treatment<-factor(LSM$Treatment,levels(LSM$Treatment)[c(8,5,1,2,7,4,6,3)])
+```
+
+
+> Creating LSMeans bar plots with confidence intervals and significant differences indicated by connecting leters
+
+```{r eval=T}
+ggplot(LSM,aes(Treatment,lsmean, fill=Treatment))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:8),y=upper.CL+.5),size=5)+
+  ylab("Weight (kg)")+
+  theme_classic()+
+  theme(legend.position = "none")  
+```
+
+
+> ## 2. Randomized Complete Block Design (RCBD)
+
+> * Blocks are groups of experimental units that are formed such that units within blocks are as homogeneous as possible.
+> * Blocking is a statistical technique designed to identify and control variation among groups of experimental units.
+> * Blocking is a restriction on randomization
+> * In a randomized complete block design (RCBD), each level of a "treatment" appears once in each block, and each block contains all the treatments. 
+
+> ### **Advantages:**
+> * Accuracy of results.
+> * Flexibility of design.
+> * Missing data can be accounted  
+> * Statistical anaylsis is simple.
+
+> #### Dataset:
+> Corn yield from six different fertilizer apllication methods with three replicates.
+
+```{r eval=T}
+fert.placement<-data.frame(
+  Treatment=c(rep("Control",3),
+              rep("2 x 2 in. band",3),
+              rep("Broadcast",3),
+              rep("Deep band",3),
+              rep("Disk applied",3),
+              rep("Sidedressed",3)),
+  Replicate=rep(1:3,6),
+  Grain.yield.buac=c(147.0,130.1,142.2,
+                   159.4,167.3,150.5,
+                   158.9,166.2,159.1,
+                   173.6,170.8,162.5,
+                   158.4,169.3,160.2,
+                   157.1,148.8,139.0)
+)
+
+fert.placement$Treatment<-as.factor(fert.placement$Treatment)
+fert.placement$Replicate<-as.factor(fert.placement$Replicate)
+
+
+head(fert.placement)
+```
+
+> Data summary.
+
+```{r eval=T}
+summary(fert.placement)
+```
+
+> Visualizing the raw data.
+
+```{r eval=T}
+ggplot(fert.placement,aes(Treatment,Grain.yield.buac,fill=Treatment))+
+  geom_boxplot(size=1)+
+  theme_classic()
+```
+
+> Lets run a CRD to begin so we can see how the blocked replications help partition statistical variance. **Play close attention to the residual Mean Sq as we proceed**
+
+```{r eval=T}
+CRD.aov<-aov(Grain.yield.buac~Treatment,data = fert.placement)
+
+summary(CRD.aov)
+```
+> Now lets run the RCBD. What has happened?
+
+```{r eval=T}
+RCBD.aov<-aov(Grain.yield.buac~Treatment+Replicate,data = fert.placement)
+
+summary(RCBD.aov)
+```
+> Ok lets implement the CRD in RMEL
+> * Treatment has to be random to execute REML as one random effect is necessary. We can run ML using REML=F to overcome this for a CRD. For now we will use random to look at the variance components.
+
+```{r eval=T}
+CRD.reml<-lmer(Grain.yield.buac~(1|Treatment),data = fert.placement)
+
+summary(CRD.reml)
+```
+
+> What do you notice about the variance components when we add the blocking factor?
+
+```{r eval=T}
+RCBD.reml<-lmer(Grain.yield.buac~(1|Treatment)+(1|Replicate),data = fert.placement)
+
+summary(RCBD.reml)
+```
+
+> Great! Lets run the appropriate model now with random replicates and fixed treatments. 
+
+```{r eval=T}
+RCBD.reml<-lmer(Grain.yield.buac~Treatment+(1|Replicate),data = fert.placement)
+
+RCBD.reml
+```
+> What if we want p-vals? We will revisit this in more detail later.
+
+```{r eval=T}
+anova(RCBD.reml)
+```
+
+> This is good information as to why p-vals are not presented by lme4 but there are multiple ways which you can calculate these. All of which have pros and cons.
+
+``` {r eval=F}
+?lme4::pvalues
+```
+
+> Let extract the BLUES of Treatment
+
+``` {r eval=T}
+(Grain.BLUPS<-fixef(RCBD.reml))
+```
+
+> This is great but we really want the EBLUPS for interpretation and publication.
+>This is the classical way by adding the BLUPS to the intercept, which becomes very complicated as model terms and degrees of freedom increase! Luckly we have great R functions!
+
+``` {r eval=T}
+(Grain.BLUPS<-Grain.BLUPS[-1]+Grain.BLUPS[1])
+```
+
+>#### Least Squared Means Comparision aka EBLUPS
+
+```{r eval=T}
+LSD.grain<-lsmeans(RCBD.reml, ~Treatment)
+
+(LSM.grain<-cld(LSD.grain,Letters = LETTERS, decreasing=T))
+```
+
+```{r eval=T}
+LSM.grain$Treatment<-factor(LSM.grain$Treatment,levels(LSM.grain$Treatment)[c(3,6,1,2,5,4)])
+```
+
+```{r eval=T}
+ggplot(LSM.grain,aes(Treatment,lsmean, fill=Treatment))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:6),y=upper.CL+8),size=5)+
+  ylab("Grain Yield (bu/ac)")+
+  theme_classic()+
+  theme(legend.position = "none")  
+```
+```{r}
+fert.placement$residuals<-resid(RCBD.reml)
+
+ggplot(fert.placement,aes(sample=residuals)) +
+ stat_qq_band() +
+ stat_qq_line() +
+ stat_qq_point()
+```
+
+```{r eval=T}
+shapiro.test(fert.placement$residuals)
+```
+
+```{r eval=T}
+leveneTest(Grain.yield.buac~Treatment,data=fert.placement)
+```
+
+
+> ## **3. Factorial Experiments**
+
+> * An experimental design that allows researchers to study multiple independent variables in one experiment.  
+> * By definition consists of two or more combinations of different factors.  
+> * Comparisions are made between the main and interaction effects.  
+
+> ### **Advantages:**
+> * Econimizes experimental resources (time and resources).
+> * Allow the estimate of each main effect with equal percision.
+> * Extends the range of validity of conclusions in a convienent. 
+
+> ### **Disadvantages:**
+> * Can lead to increased complexity , size, and cost of experiment when in exploratory stages of research (i.e., the number of potentially relavent factors is large).
+> * Less precisce estimates can result form heterogeneity of factors as number of treatments increases.
+> * Larger standard error compared to single factor experiments of similar size.
+>   - Can be overcome with blocking and confounding.
+
+> #### Dataset:
+> Three breeds of swine fed three different diets  to study average daily weight gain to maximize economic importantce.
+
+
+```{r eval=T}
+swine.diet<-data.frame(
+  Breed=c(rep("Duroc",9),
+              rep("Yorkshire",9),
+              rep("Landrace",9)),
+  Diet=rep(c(rep("D1",3),
+         rep("D2",3),
+         rep("D3",3)),3),
+  Replicate=rep(1:3,9),
+  ADWG.lb=c(1.80,2.00,2.20,
+                     1.50,1.74,1.85,
+                     2.05,2.08,2.25,
+                     2.00,1.80,1.95,
+                     1.85,1.65,1.56,
+                     1.90,2.22,2.15,
+                     2.15,2.12,2.18,
+                     1.75,1.86,1.95,
+                     2.17,2.05,2.28)
+)
+
+swine.diet$Breed<-as.factor(swine.diet$Breed)
+swine.diet$Diet<-as.factor(swine.diet$Diet)
+swine.diet$Replicate<-as.factor(swine.diet$Replicate)
+
+
+head(swine.diet)
+```
+
+> Data structure.
+
+```{r eval=T}
+summary(swine.diet)
+```
+
+> Grouping diet and swine to create a grouped column.
+
+```{r eval=T}
+swine.diet$groups<-as.factor(paste(swine.diet$Breed,swine.diet$Diet,sep="-"))
+
+summary(swine.diet)
+```
+> Visualize raw data.
+
+```{r eval=T}
+ggplot(swine.diet,aes(Diet,ADWG.lb,fill=Breed))+
+  geom_boxplot(size=1)+
+  theme_classic()
+```
+
+> #### Levene's test  
+> Will provide a p-value to unequal variance testing.
+> p-val < alpha : reject H~0~ that the variances are equal.
+
+```{r eval=T}
+leveneTest(ADWG.lb~Breed,data=swine.diet)
+
+leveneTest(ADWG.lb~Diet,data=swine.diet)
+
+leveneTest(ADWG.lb~groups,data=swine.diet)
+```
+
+> Lets run the factorial model!
+
+```{r eval=T}
+swine.reml<-lmer(ADWG.lb ~ Breed + Diet + Breed:Diet + (1|Replicate),data = swine.diet)
+
+summary(swine.reml)
+```
+
+> Estimating p-vals. 
+
+```{r eval=T}
+anova(swine.reml)
+```
+
+> Parametric bootstraping is one of the best ways to calculate p-vals of a LMMs.
+> **WARNING: THIS CAN BE COMPUTATIONALLY DEMANDING**
+
+```{r eval=T}
+# mixed(ADWG.lb ~ Breed + Diet + Breed:Diet +(1|Replicate),
+#       data = swine.diet,
+#       method="PB",
+#       args_test = list(nsim = 1000, cl = 1))
+```
+> Checking normality of residuals.
+
+```{r eval=T}
+swine.diet$residuals<-resid(swine.reml)
+
+ggplot(swine.diet,aes(sample=residuals)) +
+ stat_qq_band() +
+ stat_qq_line() +
+ stat_qq_point()
+```
+
+> #### Shapiro-Wilk test normality test 
+> p-val < alpha : reject H~0~ that the residuals are normally distributed.
+
+```{r eval=T}
+shapiro.test(swine.diet$residuals)
+```
+
+> Extracting EBLUEs and connecting letters for Breed treatment
+
+```{r eval=T}
+
+LSD<-lsmeans(swine.reml, ~Breed)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Reordering factors for figure.
+
+```{r eval=T}
+LSM$Breed<-factor(LSM$Breed,levels(LSM$Breed)[c(3,1,2)])
+```
+
+> Visualizing Breed BLUEs
+
+```{r eval=T}
+ggplot(data=LSM,aes(Breed,lsmean,fill=Breed))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:3),y=upper.CL+.5),size=5)+
+  ylab("Average Daily Weight Gain (lb)")+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+> Extracting EBLUEs and connecting letters for Diet treatment
+
+```{r eval=T}
+LSD<-lsmeans(swine.reml, ~Diet)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Reordering factors for figure.
+
+```{r eval=T}
+LSM$Diet<-factor(LSM$Diet,levels(LSM$Diet)[c(2,1,3)])
+```
+
+> Visualizing Diet BLUEs
+
+```{r eval=T}
+ggplot(data=LSM,aes(Diet,lsmean,fill=Diet))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:3),y=upper.CL+.5),size=5)+
+  ylab("Average Daily Weight Gain (lb)")+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+> Extracting EBLUEs and connecting letters for Breed:Diet interaction.
+
+```{r eval=T}
+LSD<-lsmeans(swine.reml, ~ Breed*Diet)
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+> Visualizing Breed:Diet interaction.
+
+```{r eval=T}
+ggplot(LSM,aes(Diet, lsmean, group=Breed,color=Breed))+
+  geom_line(stat="identity",size =2)+
+  ylab("Average Daily Weight Gain (lb)")+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+> Let's organize the diets in acesnding order to make our graph easier to interpret and visually appealing. 
+
+```{r eval=T}
+LSM$Diet<-factor(LSM$Diet,levels(LSM$Diet)[c(2,1,3)])
+```
+
+```{r eval=T}
+ggplot(LSM,aes(Diet, lsmean, group=Breed,color=Breed))+
+  geom_line(stat="identity", size=2)+
+  ylab("Average Daily Weight Gain (lb)")+
+  theme_classic()
+```
+
+> ## **4. Split Plot (Nested) Design**
+
+> * An experimental design where the number of treatments is significantly large and connot be easily implemented.  
+> * *Main plots* are split into smaller *subplots* to accommidate more precise measurements of the *subplot* and interaction with *main plot*.  
+>   - This means the precision of the *subplot* is achieved at the expense of the main factor precision.  
+
+> #### Dataset:
+> Grain yield data of five corn hybrids grown (*main plot*) in four levels of nitrogen (*subplot*) in a split-Plot experiment with two reps.
+
+```{r eval=T}
+splitplot<-data.frame(
+  Nitrogen=rep(c(0,70,140,210),10),
+  Hybrid=rep(c(rep("P3747",4),
+               rep("P3732",4),
+               rep("Mo17 x A634",4),
+               rep("A632 x LH38",4),
+               rep("LH74 x LH51",4)),
+             2),
+  Replicate=c(rep(1,20),rep(2,20)),
+  Yield.buac=c(130,150,170,165,
+               125,150,160,165,
+               110,140,155,150,
+               115,140,160,140,
+               115,170,160,170,
+               135,170,190,185,
+               150,160,180,200,
+               135,155,165,175,
+               130,150,175,170,
+               145,180,195,200)
+)
+
+splitplot$Nitrogen<-as.factor(splitplot$Nitrogen)
+splitplot$Hybrid<-as.factor(splitplot$Hybrid)
+splitplot$Replicate<-as.factor(splitplot$Replicate)
+
+
+head(splitplot)
+```
+> Lets visualize the data. 
+
+```{r eval=T}
+ggplot(splitplot,aes(Nitrogen,Yield.buac,fill=Hybrid))+
+  geom_boxplot(size=1)+
+  theme_classic()
+```
+> LEts run the split plot analysis. Take note of the random effects and think of why they are in the model from your classical ANOVA knowledge.
+
+```{r eval=T}
+spltplot.reml<-lmer(Yield.buac ~ (1|Replicate) + Hybrid + (1|Replicate:Hybrid) + Nitrogen + Hybrid:Nitrogen, data = splitplot)
+
+summary(spltplot.reml)
+```
+
+> Lets calculate p-val. Why are we using these new arguements?
+
+```{r eval=T}
+anova(spltplot.reml,type="III", ddf="Kenward-Roger")
+```
+
+> If you would like to run parametric bootstrapping remove the comments (#) and execute the script. 
+
+```{r eval=T, warning=F}
+# mixed(Yield.buac ~ (1|Replicate) + Nitrogen + (1|Replicate:Nitrogen) + Hybrid + Hybrid:Nitrogen, 
+#       data = splitplot,
+#       method="PB",
+#       args_test = list(nsim = 1000, cl = 1))
+```
+
+> Lets run classical ANOVA and see if there are any major differences?
+
+```{r eval=T}
+spltplot.aov<-aov(Yield.buac ~ Replicate + Hybrid + Error(Replicate:Hybrid) + Nitrogen + Hybrid:Nitrogen, data = splitplot)
+
+summary(spltplot.aov)
+```
+> QQ-plot of residuals.
+
+```{r eval=T}
+splitplot$residuals<-resid(spltplot.reml)
+
+ggplot(splitplot,aes(sample=residuals)) +
+ stat_qq_band() +
+ stat_qq_line() +
+ stat_qq_point()
+```
+
+
+> #### Shapiro-Wilk test normality test 
+> p-val < alpha : reject H~0~ that the residuals are normally distributed.
+
+```{r eval=T}
+shapiro.test(splitplot$residuals)
+```
+
+> #### Levene's test  
+> Will provide a p-value to unequal variance testing.
+> p-val < alpha : reject H~0~ that the variances are equal.
+
+```{r eval=T}
+
+leveneTest(Yield.buac~Nitrogen,data=splitplot)
+
+leveneTest(Yield.buac~Hybrid,data=splitplot)
+```
+> Let's extract the Nitrogen treatment (*subplot*) EBLUEs as it has the highest accuracy.
+
+```{r eval=T}
+LSD<-lsmeans(spltplot.reml, ~Nitrogen)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+> Visualizing Nitrogen EBLUEs.
+
+```{r eval=T}
+ggplot(data=LSM,aes(Nitrogen,lsmean,fill=Nitrogen))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:4),y=upper.CL+15),size=5)+
+  ylab("Yield (bu/ac)")+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+> Let's extract the Hybrid treatment (*main plot*) EBLUEs.
+
+```{r eval=T}
+
+LSD<-lsmeans(spltplot.reml, ~Hybrid)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+> Organizing factors for figure.
+
+```{r eval=T}
+LSM$Hybrid<-factor(LSM$Hybrid,levels(LSM$Hybrid)[c(1,3,4,5,2)])
+```
+
+> Visualizing Hybrid EBLUEs.
+
+```{r eval=T}
+ggplot(data=LSM,aes(Hybrid,lsmean,fill=Hybrid))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:5),y=upper.CL+15),size=5)+
+  ylab("Yield (bu/ac)")+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+Let's extract the Hybrid:Nitrogen interaction EBLUEs.
+
+```{r eval=T}
+
+LSD<-lsmeans(spltplot.reml, ~Nitrogen*Hybrid)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+> Plot  Hybrid:Nitrogen interaction EBLUEs.
+
+```{r eval=T}
+ggplot(LSM,aes(Nitrogen, lsmean, group=Hybrid,color=Hybrid))+
+  geom_line(stat="identity", size=2)+
+  ylab("Yield (bu/ac)")+
+  theme_classic()
+
+```
+
+> **5. Split Split Plot  Design** 
+
+> * An extension of the Split-plot design in which the *subplot* is further divided to include *sub-subplots*.  
+>   - This means the precision of the *-sub-subplot* is achieved at the expense of the *subplot* and *main plot*.  
+
+> #### Dataset:
+> A study to determine the influence of plant density and hybrids on corn (*Zea mays* L.) yield. The experiment is is layed out as a split-split-plot experimet with hybrid *main plots*, subdivided by row spacing (in.) *subplots*, futher subdivided by plant desnity (plantsa/ac) *sub-subplots*.
+
+```{r eval=T}
+ssplot<-data.frame(
+  Hybrid=as.factor(c(rep("P3740",24),
+           rep("B730 x LH55 ",24))),
+  RowSpacing.in=as.factor(rep(c(rep(12,12),
+                      rep(25,12)),
+                    2)),
+  PlantingDensity.plantsac=as.factor(rep(c(rep(12000,4),
+                                 rep(16000,4),
+                                 rep(20000,4)),
+                               4)),
+  Replicate=as.factor(rep(1:4,12)),
+  Yield.buac=c(140,138,130,142,
+               145,146,150,147,
+               150,149,146,150,
+               136,132,134,138,
+               140,134,136,140,
+               145,138,138,142,
+               142,132,128,140,
+               146,136,140,141,
+               148,140,142,140,
+               132,130,136,134,
+               138,132,130,132,
+               140,134,130,136)
+)
+
+# splitsplitplot$Hybrid<-as.factor(splitplot$Hybrid)
+# splitsplitplot$RowSpacing.in<-as.factor(splitsplitplot$RowSpacing.in)
+# splitsplitplot$Hybrid<-as.factor(splitplot$Hybrid)
+# splitsplitplot$Replicate<-as.factor(spliitsplitplot$Replicate)
+
+
+head(ssplot)
+```
+> Visualize the raw data.
+
+```{r eval=T}
+ggplot(ssplot,aes(RowSpacing.in,Yield.buac,fill=PlantingDensity.plantsac))+
+  geom_boxplot(size=1)+
+  facet_wrap(~Hybrid)+
+  theme_classic()
+```
+
+> Lets run the statistical model. Now we have additional random effects to appropriate error correctly.
+
+```{r eval=T}
+ssplot.reml<-lmer(Yield.buac ~ (1|Replicate) + Hybrid + (1|Replicate:Hybrid) + RowSpacing.in + Hybrid:RowSpacing.in + (1|Replicate:Hybrid:RowSpacing.in) + PlantingDensity.plantsac + Hybrid:PlantingDensity.plantsac + RowSpacing.in:PlantingDensity.plantsac + Hybrid:RowSpacing.in:PlantingDensity.plantsac, data = ssplot)
+
+summary(ssplot.reml)
+```
+> Calculate p-vals.
+
+```{r eval=T}
+anova(ssplot.reml,type="III", ddf="Kenward-Roger")
+```
+> If you would like to run parametric bootstrapping remove the comments (#) and execute the script. 
+
+```{r eval=T, warning=F}
+# mixed(Yield.buac ~ (1|Replicate) + Hybrid + (1|Replicate:Hybrid) + RowSpacing.in + Hybrid:RowSpacing.in + (1|Replicate:Hybrid:RowSpacing.in) + PlantingDensity.plantsac + Hybrid:PlantingDensity.plantsac + RowSpacing.in:PlantingDensity.plantsac + Hybrid:RowSpacing.in:PlantingDensity.plantsac,
+#      data = splitsplitplot,
+#       method="PB",
+#      args_test = list(nsim = 1000, cl = 1))
+```
+
+> QQ-plots for normality check.
+
+```{r eval=T}
+ssplot$residuals<-resid(ssplot.reml)
+
+ggplot(ssplot,aes(sample=residuals)) +
+ stat_qq_band() +
+ stat_qq_line() +
+ stat_qq_point()
+```
+> Let's extract the Hybrid treatment (*main plot*) EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~Hybrid)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+> Visualizing Hybrid treatment (*main plot*) EBLUEs.
+
+```{r eval=T}
+(hybrid.ggp<-ggplot(data=LSM,aes(Hybrid,lsmean,fill=Hybrid))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:2),y=upper.CL+15),size=5)+
+  ylab("Yield (bu/ac)")+
+  theme_classic()+
+  theme(legend.position = "none"))
+```
+
+> Let's extract the Row Spacing treatment (*subplot*) EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~RowSpacing.in)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing Row Spacing treatment (*subplot*) EBLUEs.
+
+```{r eval=T}
+(spacing.ggp<-ggplot(data=LSM,aes(RowSpacing.in,lsmean,fill=RowSpacing.in))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:2),y=upper.CL+15),size=5)+
+  ylab("Yield (bu/ac)")+
+  xlab("Row Spacing (in)")+
+  theme_classic()+
+  theme(legend.position = "none"))
+```
+
+> Let's extract the Planting Density treatment (*sub-subplot*) EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~PlantingDensity.plantsac)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing Planting Density treatment (*sub-subplot*) EBLUEs.
+
+```{r eval=T}
+(density.ggp<-ggplot(data=LSM,aes(PlantingDensity.plantsac,lsmean,fill=PlantingDensity.plantsac))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=lower.CL,ymax=upper.CL),width=.3,size=2)+
+  geom_text(aes(label=.group,x=c(1:3),y=upper.CL+15),size=5)+
+  ylab("Yield (bu/ac)")+
+  xlab("Planting Densityg (plants/ac)")+
+  theme_classic()+
+  theme(legend.position = "none"))
+```
+
+> Let's extract the Hybrid:Row Spacing interaction EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~Hybrid:RowSpacing.in)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing Hybrid:Row Spacing interaction EBLUEs.
+
+```{r eval=T}
+
+ggplot(LSM,aes(RowSpacing.in, lsmean, group=Hybrid,color=Hybrid))+
+  geom_line(stat="identity", size=2)+
+  ylab("Yield (bu/ac)")+
+  xlab("Row Spacing (in)")+
+  theme_classic()
+
+```
+
+> Let's extract the Hybrid:Planting Density interaction EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~Hybrid:PlantingDensity.plantsac)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing Hybrid:Planting Density interaction EBLUEs.
+
+```{r eval=T}
+
+ggplot(LSM,aes(PlantingDensity.plantsac, lsmean, group=Hybrid,color=Hybrid))+
+  geom_line(stat="identity", size=2)+
+  ylab("Yield (bu/ac)")+
+  xlab("Planting Density (plants/ac)")+
+  theme_classic()
+
+```
+
+> Let's extract the Row Spacing:Planting Density interaction EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~RowSpacing.in:PlantingDensity.plantsac)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing Row Spacing:Planting Density interaction EBLUEs.
+
+```{r eval=T}
+
+ggplot(LSM,aes(PlantingDensity.plantsac, lsmean, group=RowSpacing.in,color=RowSpacing.in))+
+  geom_line(stat="identity", size=2)+
+  ylab("Yield (bu/ac)")+
+  xlab("Planting Density (plants/ac)")+
+  theme_classic()
+
+```
+
+> Let's extract three way interaction EBLUEs.
+
+```{r eval=T}
+LSD<-lsmeans(ssplot.reml, ~Hybrid:RowSpacing.in:PlantingDensity.plantsac)
+
+(LSM<-cld(LSD,Letters = LETTERS, decreasing=T))
+```
+
+> Visualizing three way interaction EBLUEs.
+
+```{r eval=T,message=F}
+ggplot(LSM,aes(PlantingDensity.plantsac, lsmean, group=RowSpacing.in,color=RowSpacing.in))+
+  geom_line(stat="identity", size=2)+
+  ylab("Yield (bu/ac)")+
+  xlab("Planting Density (plants/ac)")+
+  facet_wrap(~Hybrid)+
+  theme_classic()
+```
+
+> ## 6. Mult-Evironment Hybrid Trials.
+
+> For more information on the Genomes to Fields Inititive <https://www.genomes2fields.org/>
+
+> To Access the full data set please visit this [link] <https://datacommons.cyverse.org/browse/iplant/home/shared/commons_repo/curated/tamu_corn_2017_CS17_G2F_20190305> and site:  
+Seth C. Murray, Malambo Lonesome, Sorin Popescu, Dale Cope, Steven L. Anderson, Anjin Chang, Jinha Jung, Nathalia Cruzato, Scott Wilde, Ramona L. Walls (2019). G2F Maize UAV Data, College Station, Texas 2017. 1.1. CyVerse Data Commons. DOI 10.25739/4ext-5e97
+
+
+```{r eval=T,message=F}
+G2F<-read.csv("C:\\Users\\steve\\OneDrive\\CS17_G2F_Data.csv",
+              header=T,
+              stringsAsFactors = F)
+
+# G2F<-CS17.G2F
+
+G2F$Pedigree<-as.factor(G2F$Pedigree)
+G2F$Rep<-as.factor(G2F$Rep)
+G2F$Range<-as.factor(G2F$Range)
+G2F$Row<-as.factor(G2F$Row)
+
+
+summary(G2F)
+```
+
+> Visualize the data
+
+```{r eval=T}
+ggplot(G2F,aes(Test ,BuA, fill=Test))+
+  geom_boxplot(size=1)+
+  # facet_wrap(~Test)+
+  theme_classic()
+```
+
+```{r eval=T}
+ggplot(G2F,aes(BuA,fill=Test))+
+  geom_histogram(size=1)+
+  facet_wrap(~Test)+
+  theme_classic()
+```
+
+```{r eval=T}
+for (i in 1:nrow(G2F)){
+  if(is.na(G2F$BuA[i])){next}
+  if(G2F$BuA[i]<50){
+    G2F$BuA[i]<-NA
+  }
+}
+```
+
+```{r eval=T}
+ggplot(G2F,aes(BuA,fill=Test))+
+  geom_histogram(size=1)+
+  facet_wrap(~Test)+
+  theme_classic()
+```
+
+```{r eval=T}
+G2FE<-lmer(BuA~(1|Rep)+(1|Pedigree)+(1|Range)+(1|Row),data=G2F[G2F$Test=="G2FE",])
+
+summary(G2FE)
+```
+```{r eval=T}
+(G2FE_rand<-as.data.frame(VarCorr(G2FE)))
+```
+
+```{r eval=T}
+G2FE_rand$PercVarExp<-G2FE_rand$vcov/sum(G2FE_rand$vcov)
+
+G2FE_rand
+```
+
+```{r eval=T}
+vPed<-G2FE_rand$vcov[G2FE_rand$grp=="Pedigree"]
+vRes<-G2FE_rand$vcov[G2FE_rand$grp=="Residual"]
+nRep<-length(levels(as.factor(as.character(G2F$Rep[G2F$Test=="G2FE"]))))
+
+G2FE_R2<-(vPed)/(vPed+(vRes/nRep))
+
+print(paste("G2FE BuA Repeatability is",round(G2FE_R2*100,2),"%",sep=" "))
+
+```
+
+```{r eval=T}
+G2FE<-lmer(BuA~(1|Rep)+Pedigree+(1|Range)+(1|Row),data=G2F[G2F$Test=="G2FE",])
+
+anova(G2FE)
+```
+
+```{r eval=T}
+#This first part can take some time (~5 mins)!
+ptm<-proc.time()
+LSD<-as.data.frame(lsmeans(G2FE, ~Pedigree))
+proc.time()-ptm
+
+LSD[order(LSD$lsmean, decreasing = T),][1:10,]
+
+# LSD.df<-as.data.frame(LSD)
+
+#This takes a very long time in
+# ptm<-proc.time()
+# LSD<-lsmeans(G2FE, ~Pedigree)
+# 
+# LSM<-cld(LSD, decreasing=T)
+# proc.time()-ptm
+```
+
+
+```{r eval=T}
+G2F.reml.rand<-lmer(BuA ~ (1|Rep:Test) + (1|Pedigree) + (1|Test) + (1|Pedigree:Test) + (1|Range:Test) + (1|Row:Test), data=G2F)
+
+summary(G2F.reml.rand)
+```
+
+```{r eval=T}
+G2F_rand<-as.data.frame(VarCorr(G2F.reml.rand))
+
+G2F_rand$PercVarExp<-G2F_rand$vcov/sum(G2F_rand$vcov)
+
+G2F_rand
+
+```
+
+```{r eval=T}
+vPed<-G2F_rand$vcov[G2F_rand$grp=="Pedigree"]
+vRes<-G2F_rand$vcov[G2F_rand$grp=="Residual"]
+vGXE<-G2F_rand$vcov[G2F_rand$grp=="Pedigree:Test"]
+nRep<-2
+nLoc<-3
+
+G2F_R2<-(vPed)/(vPed+(vGXE/nLoc)+(vRes/(nRep*nLoc)))
+
+print(paste("Estimated CS17-G2F BuA Repeatability is",round(G2F_R2*100,2),"%",sep=" "))
+
+```
+
+
+```{r eval=T}
+G2F.lmer<-lmer(BuA ~ (1|Rep:Test) + Pedigree + (1|Test) + (1|Pedigree:Test) + (1|Range:Test) + (1|Row:Test), data=G2F)
+
+anova(G2FE)
+```
+
+```{r eval=T}
+#This first part can take some time (~5 mins)!
+ptm<-proc.time()
+
+LSD<-as.data.frame(lsmeans(G2F.lmer, ~Pedigree))
+
+proc.time() - ptm
+```
+
+```{r eval=T}
+LSD[order(LSD$lsmean, decreasing = T),][1:10,]
+```
