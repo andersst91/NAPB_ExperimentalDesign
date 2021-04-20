@@ -11,15 +11,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r eval=T, echo=T, error=F, warning=F, message=F}
-# install.packages("lme4")
-# install.packages("ggplot2")
-# install.packages("car")
-# install.packages("lsmeans")
-# install.packages("multcomp")
-# install.packages("lmerTest")
-# install.packages("qqplotr")
-# install.packages("lmerTest")
-# install.packages("afex")
+install.packages("lme4")
+install.packages("ggplot2")
+install.packages("car")
+install.packages("lsmeans")
+install.packages("multcomp")
+install.packages("lmerTest")
+install.packages("qqplot")
+install.packages("lmerTest")
+install.packages("afex")
 
 
 library("lme4")
@@ -928,9 +928,11 @@ Seth C. Murray, Malambo Lonesome, Sorin Popescu, Dale Cope, Steven L. Anderson, 
 
 
 ```{r eval=T,message=F}
-G2F<-read.csv("C:\\Users\\steve\\OneDrive\\CS17_G2F_Data.csv",
-              header=T,
-              stringsAsFactors = F)
+# G2F<-read.csv("C:\\Users\\steve\\OneDrive\\CS17_G2F_Data.csv",
+#               header=T,
+#               stringsAsFactors = F)
+
+G2F<-CS17.G2F
 
 G2F$Pedigree<-as.factor(G2F$Pedigree)
 G2F$Rep<-as.factor(G2F$Rep)
