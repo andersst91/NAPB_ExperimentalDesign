@@ -927,12 +927,20 @@ ggplot(LSM,aes(PlantingDensity.plantsac, lsmean, group=RowSpacing.in,color=RowSp
 Seth C. Murray, Malambo Lonesome, Sorin Popescu, Dale Cope, Steven L. Anderson, Anjin Chang, Jinha Jung, Nathalia Cruzato, Scott Wilde, Ramona L. Walls (2019). G2F Maize UAV Data, College Station, Texas 2017. 1.1. CyVerse Data Commons. DOI 10.25739/4ext-5e97
 
 
+
+
 ```{r eval=T,message=F}
+# You can download the csv file from the google drive link below
+
 # G2F<-read.csv("C:\\Users\\steve\\OneDrive\\CS17_G2F_Data.csv",
 #               header=T,
 #               stringsAsFactors = F)
 
-G2F<-CS17.G2F
+# To load the G2F data please adjust the path to refelct where you downloaded and extracted the CS17-G2F.RData from the git hub repository clone
+
+load("C:/Users/steve/OneDrive/NAPB_ExperimentalDesign/NAPB_ExperimentalDesign/Data/CS17-G2F.RData")
+
+# G2F
 
 G2F$Pedigree<-as.factor(G2F$Pedigree)
 G2F$Rep<-as.factor(G2F$Rep)
